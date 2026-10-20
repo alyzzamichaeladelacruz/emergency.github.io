@@ -54,9 +54,11 @@
       const el = document.createElement("div");
       el.id = "rainEmOverlay";
       el.className = "rain-em-overlay";
+      // One big call button per number (agencies can have several).
       const buttons = contacts.map((c) =>
-        '<a class="btn-emergency" href="tel:' + String(c.number).replace(/[^\d+]/g, "") + '">' +
-        '<i class="bi bi-telephone-fill"></i> ' + c.name + " — " + c.number + "</a>").join("");
+        (c.numbers || [c.number]).map((n) =>
+          '<a class="btn-emergency" href="tel:' + String(n).replace(/[^\d+]/g, "") + '">' +
+          '<i class="bi bi-telephone-fill"></i> ' + c.name + " — " + n + "</a>").join("")).join("");
       el.innerHTML =
         '<div class="rain-em-inner">' +
           '<button type="button" class="rain-em-close" id="rainEmClose">Close</button>' +
