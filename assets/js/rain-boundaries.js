@@ -1,13 +1,14 @@
-/* RainBoundaries — draws barangay boundary polygons (GeoJSON) on a Leaflet map.
-   Shared helper: any RAIN page can call RainBoundaries.attach(map, url).
-   Expected file: GeoJSON in WGS84 (EPSG:4326, lon/lat). See assets/data/README.txt. */
+/* RainBoundaries — draws barangay polygons on a Leaflet map, one distinct colour per barangay.
+   Shared helper: any RAIN page can call RainBoundaries.attach(map, url, { fallback }).
+   1) Tries the real GeoJSON at `url` (WGS84 lon/lat — see assets/data/README.txt).
+   2) If that is missing/invalid, draws opts.fallback (window.RAIN_ZONES): APPROXIMATE
+      nearest-hall zones, flagged properties.zone = true. These are not official boundaries. */
 (function () {
   const NAME_KEYS = [
     "adm4_en", "ADM4_EN", "brgy_name", "BRGY_NAME", "barangay", "Barangay", "BARANGAY",
     "NAME_4", "name_4", "NAME_3", "adm3_en", "name", "Name", "NAME",
   ];
-  const STYLE = { color: "#6b1d5c", weight: 1.5, fillColor: "#ec4899", fillOpacity: 0.22 };
-  const HOVER = { weight: 3, fillOpacity: 0.45 };
+  const LIGHT = [50, 62, 42];
   const cache = {};
 
   function nameOf(props) {
@@ -38,6 +39,17 @@
     return hit.length ? hit : features;
   }
 
+  // Give every feature its own colour (golden-angle hues) unless it already has one.
+  function colorize(features) {
+    features.forEach((f, i) => {
+      f.properties = f.properties || {};
+      if (!f.properties.color) {
+        f.properties.color = "hsl(" + Math.round((i * 137.508) % 360) + ",70%," + LIGHT[i % LIGHT.length] + "%)";
+      }
+    });
+    return features;
+  }
+
   async function loadGeoJSON(url) {
     if (cache[url]) return cache[url];
     const res = await fetch(url);
@@ -47,31 +59,56 @@
     const features = gj.type === "FeatureCollection" ? gj.features : gj.type === "Feature" ? [gj] : [];
     if (!features.length) throw new Error("No features found in file.");
     if (looksProjected(features)) throw new Error("Coordinates are projected (not lon/lat). Re-export as EPSG:4326.");
-    cache[url] = { type: "FeatureCollection", features: onlyTanauan(features) };
+    cache[url] = { type: "FeatureCollection", features: colorize(onlyTanauan(features)) };
     return cache[url];
   }
 
-  // Resolves to { layer, count } on success or { error } on failure (never throws).
-  async function attach(map, url) {
+  function draw(map, gj) {
+    const paneName = "rain-boundaries";
+    const pane = map.getPane(paneName) || map.createPane(paneName);
+    pane.style.zIndex = 350; // below pins/markers (overlay pane is 400)
+    const baseStyle = (f) => {
+      const approx = !!(f.properties && f.properties.zone);
+      return {
+        color: approx ? "#374151" : "#1f2937",
+        weight: approx ? 1.2 : 1.5,
+        dashArray: approx ? "4 3" : null,
+        fillColor: f.properties.color,
+        fillOpacity: approx ? 0.5 : 0.55,
+      };
+    };
+    const layer = L.geoJSON(gj, {
+      pane: paneName,
+      style: baseStyle,
+      onEachFeature: (f, l) => {
+        const approx = !!(f.properties && f.properties.zone);
+        l.bindTooltip(nameOf(f.properties) + (approx ? " (approx. zone)" : ""), { sticky: true });
+        l.on("mouseover", () => l.setStyle({ weight: 3, fillOpacity: 0.8 }));
+        l.on("mouseout", () => layer.resetStyle(l));
+      },
+    }).addTo(map);
+    return layer;
+  }
+
+  // Resolves to { layer, count, approximate } on success or { error } on failure (never throws).
+  async function attach(map, url, opts) {
+    opts = opts || {};
+    let gj = null, approximate = false, firstError = null;
     try {
-      const gj = await loadGeoJSON(url);
-      const paneName = "rain-boundaries";
-      const pane = map.getPane(paneName) || map.createPane(paneName);
-      pane.style.zIndex = 350; // below pins/markers (overlay pane is 400)
-      const layer = L.geoJSON(gj, {
-        pane: paneName,
-        style: () => STYLE,
-        onEachFeature: (f, l) => {
-          l.bindTooltip(nameOf(f.properties), { sticky: true });
-          l.on("mouseover", () => l.setStyle(HOVER));
-          l.on("mouseout", () => layer.resetStyle(l));
-        },
-      }).addTo(map);
-      return { layer, count: gj.features.length };
+      gj = await loadGeoJSON(url);
+    } catch (e) {
+      firstError = e.message || String(e);
+      if (opts.fallback && opts.fallback.features && opts.fallback.features.length) {
+        gj = opts.fallback; approximate = true;
+      }
+    }
+    if (!gj) return { error: firstError || "no boundary data" };
+    try {
+      return { layer: draw(map, gj), count: gj.features.length, approximate, note: firstError };
     } catch (e) {
       return { error: e.message || String(e) };
     }
   }
 
-  window.RainBoundaries = { attach, _util: { nameOf, looksProjected, onlyTanauan } };
+  window.RainBoundaries = { attach, _util: { nameOf, looksProjected, onlyTanauan, colorize } };
 })();

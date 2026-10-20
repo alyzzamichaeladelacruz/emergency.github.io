@@ -66,6 +66,7 @@
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="assets/js/rain-map-layers.js"></script>
 <script src="assets/js/rain-boundaries.js"></script>
+<script src="assets/js/tanauan-zones.js"></script>
 <script src="assets/js/animations.js"></script>
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/demo-data.js"></script>
@@ -194,13 +195,16 @@
       const bBtn = document.getElementById("boundaryToggle");
       const bNote = document.getElementById("boundaryNote");
       bBtn.disabled = true; bBtn.classList.remove("active"); bNote.textContent = "Loading boundaries…";
-      RainBoundaries.attach(map, "assets/data/tanauan-barangays.geojson").then((res) => {
+      // Real file if present; otherwise the generated APPROXIMATE zones (window.RAIN_ZONES).
+      RainBoundaries.attach(map, "assets/data/tanauan-barangays.geojson", { fallback: window.RAIN_ZONES }).then((res) => {
         if (res.error) {
           bNote.textContent = "Boundaries not loaded: " + res.error + " (see assets/data/README.txt)";
           return;
         }
         bBtn.disabled = false; bBtn.classList.add("active");
-        bNote.textContent = res.count + " barangay boundaries";
+        bNote.textContent = res.approximate
+          ? res.count + " approximate zones (area nearest each hall) — NOT official boundaries"
+          : res.count + " barangay boundaries";
         bBtn.onclick = () => {
           const on = map.hasLayer(res.layer);
           if (on) map.removeLayer(res.layer); else res.layer.addTo(map);
