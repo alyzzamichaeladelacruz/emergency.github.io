@@ -156,3 +156,13 @@ body {
   background: rgba(255,255,255,.15); color: #fff; border: 0; border-radius: 999px;
   padding: .4rem 1rem; cursor: pointer; float: right;
 }
+
+/* ---------- Street view panel ---------- */
+.sv-panel { border: 1px solid var(--surface-line); border-radius: 14px; overflow: hidden; background: #fff; }
+.sv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+  padding: .6rem .9rem; color: var(--navy-950); border-bottom: 1px solid var(--surface-line); }
+#svFrame { display: block; width: 100%; height: 360px; border: 0; background: #e2e8f0; }
+.sv-panel.sv-large #svFrame { height: 70vh; }
+.sv-foot { padding: .4rem .9rem; font-size: .75rem; color: var(--ink-400); }
+.map-filter-btn.active#svModeBtn { background: var(--status-critical); border-color: var(--status-critical); }
+.leaflet-popup-content a[data-sv-lat] { color: var(--accent-cyan-ink); font-weight: 600; }

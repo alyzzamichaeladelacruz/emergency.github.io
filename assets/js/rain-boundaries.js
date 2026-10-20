@@ -95,7 +95,10 @@
     opts = opts || {};
     let gj = null, approximate = false, firstError = null;
     try {
-      gj = await loadGeoJSON(url);
+      // opts.data = a GeoJSON object already in memory (e.g. window.RAIN_BOUNDARIES) — no fetch needed.
+      if (opts.data && opts.data.features && opts.data.features.length) {
+        gj = { type: "FeatureCollection", features: colorize(opts.data.features) };
+      } else gj = await loadGeoJSON(url);
     } catch (e) {
       firstError = e.message || String(e);
       if (opts.fallback && opts.fallback.features && opts.fallback.features.length) {
