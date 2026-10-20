@@ -42,8 +42,15 @@
       <button class="map-filter-btn light" data-filter="shelter"><span class="legend-dot dot-shelter"></span> Shelters &amp; Schools</button>
       <button class="map-filter-btn light" data-filter="government"><span class="legend-dot dot-government"></span> Barangay &amp; City Halls</button>
       <button class="map-filter-btn light" data-filter="mall"><span class="legend-dot dot-mall"></span> SM Malls</button>
-      <button class="map-filter-btn light" data-filter="barangay"><span class="legend-dot" style="background:#7c3aed;"></span> Barangay Locations</button>
+      <button class="map-filter-btn light" data-filter="barangay"><span class="legend-dot" style="background:#7c3aed;"></span> Barangay Halls (48)</button>
     </div>
+    <div class="mb-2" style="font-size:.75rem; color:var(--ink-400);">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;border:2px solid #fff;box-shadow:0 0 0 1px #7c3aed;vertical-align:middle;"></span> Hall pin
+      &nbsp;&nbsp;<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ddd6fe;border:2px dashed #7c3aed;vertical-align:middle;"></span> Approximate (district centre — not a confirmed hall)
+    </div>
+    <select id="brgySelect" class="form-select form-select-sm mb-3" aria-label="Find a barangay hall">
+      <option value="">Find a barangay hall…</option>
+    </select>
     <div class="map-frame mb-3"><div id="evac-map"></div></div>
     <div class="d-flex flex-column gap-3" id="evacList"></div>
   </div>
@@ -71,24 +78,8 @@
   const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
   const user = renderAppShell("emergency.html", { title: "Emergency" });
 
-  // Barangay coordinates (decimal degrees) — plotted as their own map layer.
-  const BARANGAYS = [
-    { name: "Altura Bata",           lat: 14.0450, lng: 121.1612 },
-    { name: "Altura Matanda",        lat: 14.0410, lng: 121.1680 },
-    { name: "Altura South",          lat: 14.0380, lng: 121.1710 },
-    { name: "Luyos",                 lat: 14.0512, lng: 121.1780 },
-    { name: "Montaña (Maria Paz)",   lat: 14.0321, lng: 121.1820 },
-    { name: "San Jose",              lat: 14.0550, lng: 121.1620 },
-    { name: "San Juan",              lat: 14.0620, lng: 121.1680 },
-    { name: "San Lucas",             lat: 14.0585, lng: 121.1550 },
-    { name: "San Pablo",             lat: 14.0510, lng: 121.1500 },
-    { name: "San Pedro",             lat: 14.0712, lng: 121.1610 },
-    { name: "San Vicente",           lat: 14.0480, lng: 121.1580 },
-    { name: "Santor",                lat: 14.0580, lng: 121.1712 },
-    { name: "Sulpoc",                lat: 14.0290, lng: 121.1650 },
-    { name: "Talaga",                lat: 14.0350, lng: 121.1480 },
-    { name: "Tinurik",               lat: 14.0520, lng: 121.1410 },
-  ];
+  // 48 Tanauan City barangay halls — data lives in assets/js/demo-data.js (RAIN_DEMO.barangays).
+  const BARANGAYS = RAIN_DEMO.barangays || [];
 
   // haversineKm() now lives in assets/js/main.js — shared across pages.
   function initEmergencyPage() {
@@ -97,19 +88,26 @@
     document.getElementById("activateEmergencyBtn").addEventListener("click", () => RainEmergencyMode.open());
 
     const contactGrid = document.getElementById("contactGrid");
-    const iconMap = { Police: "bi-shield-lock", Fire: "bi-fire", Medical: "bi-heart-pulse", NDRRMC: "bi-diagram-3" };
+    const iconMap = {
+      Police: "bi-shield-lock", Fire: "bi-fire", Medical: "bi-heart-pulse", NDRRMC: "bi-diagram-3",
+      CDRRMO: "bi-diagram-3", Traffic: "bi-cone-striped", "Coast Guard": "bi-life-preserver",
+    };
     // Emergency contacts don't change often, but save them anyway so the
     // "SOS" quick-dial numbers are guaranteed available offline even if a
     // resident never scrolls this page before losing connection.
     RainOffline.save("emergencyContacts", RAIN_DEMO.emergencyContacts);
+    // One card per agency; one tap-to-call button per number (opens the phone's dialer).
     RAIN_DEMO.emergencyContacts.forEach((c) => {
+      const nums = c.numbers || [c.number];
       const col = document.createElement("div");
-      col.className = "col-6 col-md-3";
+      col.className = "col-12 col-sm-6 col-lg-4";
       col.innerHTML = `
-        <div class="text-center p-3" style="border:1px solid var(--surface-line); border-radius:14px;">
-          <i class="bi ${iconMap[c.tag] || "bi-telephone"} fs-3 mb-2 dicon-in-view bi-anim" style="color:var(--status-critical);"></i>
-          <div style="font-size:.82rem; color:var(--ink-600); margin-bottom:.6rem;">${c.name}</div>
-          <a href="tel:${c.number.replace(/[^\d+]/g, "")}" class="btn-emergency" data-press><i class="bi bi-telephone-fill dicon-in-view bi-anim"></i> CALL ${c.number}</a>
+        <div class="text-center p-3 h-100" style="border:1px solid var(--surface-line); border-radius:14px;">
+          <i class="bi ${iconMap[c.tag] || "bi-telephone"} fs-3 mb-2" style="color:var(--status-critical);"></i>
+          <div style="font-size:.85rem; font-weight:600; color:var(--ink-600); margin-bottom:.6rem;">${c.name}</div>
+          <div class="d-flex flex-column gap-2">
+            ${nums.map((n) => `<a href="tel:${n.replace(/[^\d+]/g, "")}" class="btn-emergency" data-press><i class="bi bi-telephone-fill"></i> CALL ${n}</a>`).join("")}
+          </div>
         </div>`;
       contactGrid.appendChild(col);
     });
@@ -154,16 +152,38 @@
       const categoryLayers = { shelter: L.layerGroup(), government: L.layerGroup(), mall: L.layerGroup(), barangay: L.layerGroup() };
       const listItemsByCategory = { shelter: [], government: [], mall: [], barangay: [] };
 
-      // Barangay markers: plain circle markers so they don't depend on any
-      // icon class styling, and are clearly distinct from evacuation pins.
-      BARANGAYS.forEach((b) => {
-        L.circleMarker([b.lat, b.lng], {
-          radius: 8, color: "#ffffff", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.9,
-        })
+      // Barangay hall markers. Solid purple = hall pin; dashed pale = approximate
+      // (district centre / administrative zone, not a confirmed hall location).
+      const brgySelect = document.getElementById("brgySelect");
+      brgySelect.innerHTML = '<option value="">Find a barangay hall…</option>';
+      const brgyMarkers = [];
+      BARANGAYS.forEach((b, i) => {
+        const style = b.approx
+          ? { radius: 8, color: "#7c3aed", weight: 2, dashArray: "3 3", fillColor: "#ddd6fe", fillOpacity: 0.7 }
+          : { radius: 8, color: "#ffffff", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.95 };
+        const m = L.circleMarker([b.lat, b.lng], style)
           .addTo(categoryLayers.barangay)
-          .bindTooltip(b.name, { direction: "top" })
-          .bindPopup(`<strong>Brgy. ${b.name}</strong><br>${b.lat.toFixed(4)}° N, ${b.lng.toFixed(4)}° E`);
+          .bindTooltip(b.name + (b.approx ? " (approx.)" : ""), { direction: "top" })
+          .bindPopup(
+            `<strong>Brgy. ${b.name}</strong><br>${b.hall}` +
+            (b.approx ? `<br><em style="color:#b45309;">Approximate — district centre, not a confirmed hall pin.</em>` : "") +
+            `<br>${b.lat.toFixed(4)}° N, ${b.lng.toFixed(4)}° E` +
+            `<br><a target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?to=${b.lat},${b.lng}">Directions</a>`
+          );
+        brgyMarkers.push(m);
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = b.name + (b.approx ? " (approx.)" : "");
+        brgySelect.appendChild(opt);
       });
+      // Jump to a barangay from the dropdown: show the layer, zoom in, open its popup.
+      brgySelect.onchange = () => {
+        if (brgySelect.value === "") return;
+        const m = brgyMarkers[Number(brgySelect.value)];
+        document.querySelector('#evacFilters [data-filter="barangay"]').click();
+        map.flyTo(m.getLatLng(), 16, { duration: 0.8 });
+        map.once("moveend", () => m.openPopup());
+      };
 
       const sortedCenters = RAIN_DEMO.evacuationCenters
         .map((c) => ({ ...c, dist: haversineKm(userLat, userLng, c.lat, c.lng) }))
@@ -216,6 +236,10 @@
             else if (!show && map.hasLayer(layer)) map.removeLayer(layer);
             listItemsByCategory[cat].forEach((el) => { el.style.display = show ? "" : "none"; });
           });
+          // Zoom out to show every barangay hall when that filter is chosen.
+          if (f === "barangay" && BARANGAYS.length) {
+            map.fitBounds(L.latLngBounds(BARANGAYS.map((b) => [b.lat, b.lng])), { padding: [30, 30] });
+          }
         });
       });
 
