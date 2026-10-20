@@ -1,0 +1,8 @@
+{
+  "name": "RAIN",
+  "short_name": "RAIN",
+  "start_url": "emergency.html",
+  "display": "standalone",
+  "background_color": "#0a1830",
+  "theme_color": "#0a1830"
+}
